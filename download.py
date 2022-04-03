@@ -1,7 +1,6 @@
 import requests
 import json
 import logging
-from slugify import slugify
 import os
 from urllib.parse import urljoin, urlparse
 import re
@@ -10,6 +9,12 @@ from tqdm import tqdm
 logging.basicConfig()
 logging.root.setLevel(logging.INFO)
 
+def slugify(text):
+    text = re.sub(r"[\s]+","-",text.lower())
+    text = re.sub(r"[-]{2,}","-",text)
+    text = re.sub(r"[^a-z0-9\-]","",text)
+    text = re.sub(r"^-|-$", "", text)
+    return text
 
 """ *** THESE MUST BE SET *** """
 
@@ -122,7 +127,7 @@ for chall in challs['data']:
                 F = S.get(f_url,stream=True)
 
                 fname = urlparse(f_url).path.split("/")[-1]
-                local_f_path = os.path.join(outputDir,fname)
+                local_f_path = os.path.join(challFiles,fname)
 
                 chall_readme.write("* [%s](files/%s)\n\n" % (fname,fname))
 
