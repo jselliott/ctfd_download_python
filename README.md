@@ -15,4 +15,4 @@ Fill in the CTFd URL, API key, output directory, and CTF name in script.
 
 #### Run The Downloader
 
-    python downloader.py
+    python download.py
