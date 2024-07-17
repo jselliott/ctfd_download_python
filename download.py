@@ -70,7 +70,11 @@ def main(argv):
 
         categories = {}
 
-        logging.info("Retrieved %d challenges..." % len(challs['data']))
+        try:
+            logging.info("Retrieved %d challenges..." % len(challs['data']))
+        except:
+            logging.fatal(challs)
+            exit()
 
         desc_links = []
 
@@ -149,7 +153,7 @@ def main(argv):
                         fname = urlparse(f_url).path.split("/")[-1]
                         local_f_path = os.path.join(challFiles, fname)
 
-                        chall_readme.write("* [%s](files/%s)\n\n" % (fname, fname))
+                        chall_readme.write("* [%s](<files/%s>)\n\n" % (fname, fname))
 
                         total_size_in_bytes = int(F.headers.get('content-length', 0))
                         progress_bar = tqdm(total=total_size_in_bytes, unit='iB', unit_scale=True, desc=fname)
@@ -179,7 +183,7 @@ def main(argv):
                 for chall in categories[category]:
 
                     chall_path = "challenges/%s/%s/" % (chall['category'], slugify(chall['name']))
-                    ctf_readme.write("* [%s](%s)" % (chall['name'], chall_path))
+                    ctf_readme.write("* [%s](<%s>)" % (chall['name'], chall_path))
 
                     if "tags" in chall and len(chall["tags"]) > 0:
                         ctf_readme.write(" <em>(%s)</em>" % ",".join(chall["tags"]))
