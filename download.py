@@ -96,19 +96,19 @@ def main(argv):
             with open(os.path.join(challDir, "README.md"), "w") as chall_readme:
                 logging.info("Creating challenge readme: %s" % Y["name"])
                 chall_readme.write("# %s\n\n" % Y["name"])
-                chall_readme.write("## Description\n\n%s\n\n" % Y["description"])
+                chall_readme.write("## Description\n\n%s\n\n" % Y.get("description", "N\A"))
 
                 files_header = False
 
                 # Find links in description
-                links = re.findall(r'(https?://[^\s]+)', Y["description"])
+                links = re.findall(r'(https?://[^\s]+)', Y.get("description", "N\A"))
 
                 if len(links) > 0:
                     for link in links:
                         desc_links.append((Y["name"], link))
 
                 # Find MD images in description
-                md_links = re.findall(r'!\[(.*)\]\(([^\s]+)\)', Y["description"])
+                md_links = re.findall(r'!\[(.*)\]\(([^\s]+)\)', Y.get("description", "N\A"))
 
                 if len(md_links) > 0:
                     for link_desc, link in md_links:
