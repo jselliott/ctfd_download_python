@@ -8,10 +8,68 @@ import re
 from tqdm import tqdm
 import argparse
 import textwrap
+import sys
 
-logging.basicConfig()
-logging.root.setLevel(logging.INFO)
+class CustomFormatter(logging.Formatter):
 
+    grey = "\x1b[38;20m"
+    yellow = "\x1b[33;20m"
+    red = "\x1b[31;20m"
+    bold_red = "\x1b[31;1m"
+    reset = "\x1b[0m"
+    format = "%(asctime)s - %(name)s - %(levelname)s - %(message)s (%(filename)s:%(lineno)d)"
+
+    FORMATS = {
+        logging.DEBUG: grey + format + reset,
+        logging.INFO: grey + format + reset,
+        logging.WARNING: yellow + format + reset,
+        logging.ERROR: red + format + reset,
+        logging.CRITICAL: bold_red + format + reset
+    }
+
+    def format(self, record):
+        log_fmt = self.FORMATS.get(record.levelno)
+        formatter = logging.Formatter(log_fmt)
+        return formatter.format(record)
+
+LOG_COUNT = 0
+class ContextFilter(logging.Filter):
+    def filter(self, record):
+        global LOG_COUNT
+        LOG_COUNT += 1
+        return True
+
+# create logger 
+logger = logging.getLogger("CTFd Downloader")
+logger.setLevel(logging.WARNING)
+
+# create console handler with a higher log level
+ch = logging.StreamHandler()
+ch.setLevel(logging.WARNING)
+ch.setFormatter(CustomFormatter())
+ch.addFilter(ContextFilter())
+logger.addHandler(ch)
+
+def back_n_lines(back=1):
+    "Deletes the last line in the STDOUT"
+    if back == 0:
+        return
+    # cursor up n lines
+    for _ in range(back):
+        sys.stdout.write('\x1b[1A')
+
+def forward_n_lines(forward=1):
+    "Moves the cursor down n lines"
+    if forward == 0:
+        return
+    # cursor down n lines
+    for _ in range(forward):
+        sys.stdout.write('\033[1B')
+    sys.stdout.flush()
+
+def clear_line():
+    # delete last line
+    sys.stdout.write('\x1b[2K')
 
 def slugify(text):
     text = re.sub(r"[\s]+", "-", text.lower())
@@ -35,11 +93,23 @@ def _get_args():
     parser.add_argument("-t", "-c", "-s", "--session", help="API Token or Session Cookie (cookie format session=<SESSION_TOKEN>)", required=True)
     parser.add_argument("-o", "--output", help="Output Directory", required=True)
     parser.add_argument("--update", help="Only pull challenges that don't currently have a directory in your repository", action="store_true")
+    parser.add_argument("-v", "--verbose", action="count", default=0)
     return parser.parse_args()
 
 
 def main():
+    global LOG_COUNT
     args = _get_args()
+    print("Starting CTFd Downloader")
+    print("URL: %s" % args.url)
+
+    if args.verbose == 1:
+        logger.setLevel(logging.INFO)
+        ch.setLevel(logging.INFO)
+    elif args.verbose == 2:
+        logger.setLevel(logging.DEBUG)
+        ch.setLevel(logging.DEBUG)
+
     headers = {"Content-Type": "application/json"}
     baseUrl = args.url
     ctfName = args.name
@@ -59,7 +129,7 @@ def main():
     for d in ["challenges", "images"]:
         os.makedirs(os.path.join(outputDir, d), exist_ok=True)
 
-    logging.info("Connecting to API: %s" % apiUrl)
+    logger.info("Connecting to API: %s" % apiUrl)
 
     S = requests.Session()
     X = S.get(f"{apiUrl}/challenges", headers=headers).text
@@ -68,9 +138,9 @@ def main():
 
     # Verify that we actually got a list of challenges
     try:
-        logging.info("Retrieved %d challenges..." % len(challenges['data']))
+        logger.info("Retrieved %d challenges..." % len(challenges['data']))
     except:
-        logging.fatal(challenges)
+        logger.fatal(challenges)
         exit()
 
     categories = {}
@@ -78,7 +148,12 @@ def main():
 
     for chall in challenges['data']:
 
-        Y = json.loads(S.get(f"{apiUrl}/challenges/{chall['id']}", headers=headers).text)["data"]
+        chal_data = S.get(f"{apiUrl}/challenges/{chall['id']}", headers=headers).text
+        try:
+            Y = json.loads(chal_data)["data"]
+        except KeyError:
+            logger.error("Error fetching challenge data for %s" % chall['name'])
+            continue
 
         if Y["category"] not in categories:
             categories[Y["category"]] = [Y]
@@ -95,11 +170,11 @@ def main():
             try:
                 os.makedirs(challDir)
             except FileExistsError:
-                logging.warning("Skipping download for %s" % challDir)
+                logger.warning("Skipping download for %s" % challDir)
                 continue
 
         with open(os.path.join(challDir, "README.md"), "w") as chall_readme:
-            logging.info("Creating challenge readme: %s" % Y["name"])
+            logger.info("Creating challenge readme: %s" % Y["name"])
             chall_readme.write("# %s\n\n" % Y["name"])
             chall_readme.write("## Description\n\n%s\n\n" % Y["description"])
 
@@ -130,6 +205,8 @@ def main():
                     os.makedirs(os.path.join(outputDir, os.path.dirname(link)), exist_ok=True)
 
                     total_size_in_bytes = int(F.headers.get('content-length', 0))
+                    back_n_lines(LOG_COUNT+1)
+                    clear_line()
                     progress_bar = tqdm(total=total_size_in_bytes, unit='iB', unit_scale=True, desc=fname)
 
                     with open(local_f_path, "wb") as LF:
@@ -140,6 +217,7 @@ def main():
                         LF.close()
 
                     progress_bar.close()
+                    forward_n_lines(LOG_COUNT+1)
 
             if "files" in Y and len(Y["files"]) > 0:
 
@@ -161,6 +239,7 @@ def main():
                     chall_readme.write("* [%s](<files/%s>)\n\n" % (fname, fname))
 
                     total_size_in_bytes = int(F.headers.get('content-length', 0))
+                    back_n_lines(LOG_COUNT+1)
                     progress_bar = tqdm(total=total_size_in_bytes, unit='iB', unit_scale=True, desc=fname)
 
                     with open(local_f_path, "wb") as LF:
@@ -171,12 +250,13 @@ def main():
                         LF.close()
 
                     progress_bar.close()
+                    forward_n_lines(LOG_COUNT)
 
             chall_readme.close()
 
     with open(os.path.join(outputDir, "README.md"), "w") as ctf_readme:
 
-        logging.info("Writing main CTF readme...")
+        logger.info("Writing main CTF readme...")
 
         ctf_readme.write("# %s\n\n" % ctfName)
         ctf_readme.write("## About\n\n[insert description here]\n\n")
@@ -198,12 +278,12 @@ def main():
 
         ctf_readme.close()
 
-    logging.info("All done!")
+    logger.info("All done!")
 
     if len(desc_links) > 0:
-        logging.warning("** Warning, the following links were found in challenge descriptions, you may need to download these files manually.")
+        logger.warning("** Warning, the following links were found in challenge descriptions, you may need to download these files manually.")
         for cname, link in desc_links:
-            logging.warning("%s - %s" % (cname, link))
+            logger.warning("%s - %s" % (cname, link))
 
 
 if __name__ == "__main__":
