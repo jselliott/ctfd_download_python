@@ -147,21 +147,29 @@ def main():
     desc_links = []
 
     for chall in challenges['data']:
-
-        chal_data = S.get(f"{apiUrl}/challenges/{chall['id']}", headers=headers).text
-        try:
-            Y = json.loads(chal_data)["data"]
-        except KeyError:
-            logger.error("Error fetching challenge data for %s" % chall['name'])
-            continue
-
-        if Y["category"] not in categories:
-            categories[Y["category"]] = [Y]
+        
+        # See if we have all the information we need already
+        if (
+            "category" in chall and "name" in chall and
+            "description" in chall and "id" in chall and
+            "files" in chall
+        ):
+            chal_data = chall
         else:
-            categories[Y["category"]].append(Y)
+            chal_data = S.get(f"{apiUrl}/challenges/{chall['id']}", headers=headers).text
+            try:
+                chal_data = json.loads(chal_data)["data"]
+            except KeyError:
+                logger.error("Error fetching challenge data for %s" % chall['name'])
+                continue
 
-        catDir = os.path.join(outputDir, "challenges", Y["category"])
-        challDir = os.path.join(catDir, slugify(Y["name"]))
+        if chal_data["category"] not in categories:
+            categories[chal_data["category"]] = [chal_data]
+        else:
+            categories[chal_data["category"]].append(chal_data)
+
+        catDir = os.path.join(outputDir, "challenges", chal_data["category"])
+        challDir = os.path.join(catDir, slugify(chal_data["name"]))
 
         os.makedirs(catDir, exist_ok=True)
         if not args.update:
@@ -174,21 +182,21 @@ def main():
                 continue
 
         with open(os.path.join(challDir, "README.md"), "w") as chall_readme:
-            logger.info("Creating challenge readme: %s" % Y["name"])
-            chall_readme.write("# %s\n\n" % Y["name"])
-            chall_readme.write("## Description\n\n%s\n\n" % Y["description"])
+            logger.info("Creating challenge readme: %s" % chal_data["name"])
+            chall_readme.write("# %s\n\n" % chal_data["name"])
+            chall_readme.write("## Description\n\n%s\n\n" % chal_data["description"])
 
             files_header = False
 
             # Find links in description
-            links = re.findall(r'(https?://[^\s]+)', Y["description"])
+            links = re.findall(r'(https?://[^\s]+)', chal_data["description"])
 
             if len(links) > 0:
                 for link in links:
-                    desc_links.append((Y["name"], link))
+                    desc_links.append((chal_data["name"], link))
 
             # Find MD images in description
-            md_links = re.findall(r'!\[(.*)\]\(([^\s]+)\)', Y["description"])
+            md_links = re.findall(r'!\[(.*)\]\(([^\s]+)\)', chal_data["description"])
 
             if len(md_links) > 0:
                 for link_desc, link in md_links:
@@ -219,7 +227,7 @@ def main():
                     progress_bar.close()
                     forward_n_lines(LOG_COUNT+1)
 
-            if "files" in Y and len(Y["files"]) > 0:
+            if "files" in chal_data and len(chal_data["files"]) > 0:
 
                 if not files_header:
                     chall_readme.write("## Files\n\n")
@@ -227,7 +235,7 @@ def main():
                 challFiles = os.path.join(challDir, "files")
                 os.makedirs(challFiles, exist_ok=True)
 
-                for file in Y["files"]:
+                for file in chal_data["files"]:
 
                     # Fetch file from remote server
                     f_url = urljoin(baseUrl, file)
