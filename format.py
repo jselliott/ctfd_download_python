@@ -74,7 +74,7 @@ def main():
                 with writeup_path.open('w') as f:
                     f.writelines(new_chal_readme)
                 
-            if is_solved:
+            if is_solved and not line.startswith('* :white_check_mark: '):
                 line = line.replace('* ', '* :white_check_mark: ')
         new_readme.append(line)
     
