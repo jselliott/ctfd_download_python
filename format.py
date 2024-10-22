@@ -1,9 +1,20 @@
 import argparse
 import pathlib
 import textwrap
+import re
 
 def link_images(writeup_dir, line):
-    # TODO implement this
+    # match (((.*)))
+    # replace with ![image](writeup_dir/images/image)
+    match = re.search(r'\(\(\((.*?)\)\)\)', line)
+    if match:
+        image_name = match.group(1)
+        image_path = pathlib.Path(writeup_dir, 'images', image_name)
+        rel_path = pathlib.Path('/images', image_name)
+        if not image_path.exists():
+            print(f'Error: {image_path} does not exist')
+            return line
+        line = re.sub(r'\(\(\((.*?)\)\)\)', f'![{image_name}]({rel_path})', line)
     return line
 
 
@@ -52,11 +63,12 @@ def main():
                 writeup_content = f.readlines()
             new_chal_readme = []
             for wline in writeup_content:
-                if wline.startswith("## Solution"):
-                    is_solved = True
-                    break
                 if args.link_images:
                     wline = link_images(args.writeup_dir, wline)
+                if wline.startswith("## Solution"):
+                    is_solved = True
+                    if not args.link_images:
+                        break
                 new_chal_readme.append(wline)
             if args.link_images:
                 with writeup_path.open('w') as f:
