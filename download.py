@@ -26,10 +26,11 @@ def main(argv):
                '-u (CTF URL)\n'
                '-n (CTF name)\n'
                '-o (CTF output directory)\n'
-               '-t (API token) OR -c (Cookie: session=?)\n\n'
-               'e.g python download.py -u http://ctf.url -n ctf_name -o /home/user/Desktop/ -t api_token')
+               '-t (API token) OR -c (Cookie: session=?)\n'
+               '-f (Optional: filter by categories, comma-separated)\n\n'
+               'e.g python download.py -u http://ctf.url -n ctf_name -o /home/user/Desktop/ -t api_token -f "crypto,web"')
     try:
-        opts, _ = getopt.getopt(argv, 'hu:n:o:t:c:', ['help', 'url=', 'name=', 'output=', 'token=', 'cookie='])
+        opts, _ = getopt.getopt(argv, 'hu:n:o:t:c:f:', ['help', 'url=', 'name=', 'output=', 'token=', 'cookie=', 'filter='])
     except getopt.GetoptError:
         print('python download.py -h')
         sys.exit(2)
@@ -42,6 +43,7 @@ def main(argv):
     else:
         baseUrl, ctfName, outputDir, = "", "", ""  # defaults?
         headers = {"Content-Type": "application/json"}
+        categories_filter = [] # Add a variable to store filtered categories
         for opt, arg in opts:
             if opt in ('-u', '--url'):
                 baseUrl = arg  # URL of the CTFd
@@ -53,6 +55,8 @@ def main(argv):
                 headers["Authorization"] = f"Token {arg}"  # CTFd API Token
             elif opt in ('-c', '--cookie'):
                 headers["Cookie"] = f"session={arg}"  # CTFd API Token
+            if opt in ('-f', '--filter'):
+                categories_filter = [cat.strip().lower() for cat in arg.split(",")]
 
         os.makedirs(outputDir, exist_ok=True)
 
@@ -81,6 +85,10 @@ def main(argv):
         for chall in challs['data']:
 
             Y = json.loads(S.get(f"{apiUrl}/challenges/{chall['id']}", headers=headers).text)["data"]
+
+            # Minimal change: skip challenge if category not in filter
+            if categories_filter and Y["category"].lower() not in categories_filter:
+                continue
 
             if Y["category"] not in categories:
                 categories[Y["category"]] = [Y]
