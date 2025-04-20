@@ -8,17 +8,30 @@ import os
 from urllib.parse import urljoin, urlparse
 import re
 from tqdm import tqdm
+import unicodedata
 
 logging.basicConfig()
 logging.root.setLevel(logging.INFO)
 
 
-def slugify(text):
-    text = re.sub(r"[\s]+", "-", text.lower())
-    text = re.sub(r"[-]{2,}", "-", text)
-    text = re.sub(r"[^a-z0-9\-]", "", text)
-    text = re.sub(r"^-|-$", "", text)
-    return text
+def slugify(string):
+    """
+    Slugify a Unicode string, keeping non-ASCII characters (e.g. Arabic).
+    
+    Example:
+        >>> slugify("سلام دنیا")
+        'سلام-دنیا'
+    """
+    # Normalize to decompose diacritics (where possible)
+    normalized = unicodedata.normalize('NFKC', string)
+    
+    # Remove unwanted punctuation (except hyphens and whitespace)
+    cleaned = re.sub(r'[^\w\s-]', '', normalized, flags=re.UNICODE)
+
+    # Replace multiple spaces/hyphens with single hyphen
+    slug = re.sub(r'[-\s]+', '-', cleaned).strip('-').lower()
+
+    return slug
 
 
 def main(argv):
@@ -33,39 +46,38 @@ def main(argv):
     except getopt.GetoptError:
         print('python download.py -h')
         sys.exit(2)
+
     if len(opts) < 4:
         print(options)
         sys.exit()
-    if '-h' in opts or '--help' in opts:
+
+    if any(opt in dict(opts) for opt in ('-h', '--help')):
         print(options)
         sys.exit()
     else:
-        baseUrl, ctfName, outputDir, = "", "", ""  # defaults?
+        baseUrl, ctfName, outputDir = "", "", ""
         headers = {"Content-Type": "application/json"}
         for opt, arg in opts:
             if opt in ('-u', '--url'):
-                baseUrl = arg  # URL of the CTFd
+                baseUrl = arg
             if opt in ('-n', '--name'):
-                ctfName = arg  # CTFd Name
+                ctfName = arg
             if opt in ('-o', '--output'):
-                outputDir = arg  # Local directory to output docs
+                outputDir = arg
             if opt in ('-t', '--token'):
-                headers["Authorization"] = f"Token {arg}"  # CTFd API Token
+                headers["Authorization"] = f"Token {arg}"
             elif opt in ('-c', '--cookie'):
-                headers["Cookie"] = f"session={arg}"  # CTFd API Token
+                headers["Cookie"] = f"session={arg}"
 
         os.makedirs(outputDir, exist_ok=True)
-
         for d in ["challenges", "images"]:
             os.makedirs(os.path.join(outputDir, d), exist_ok=True)
 
         apiUrl = urljoin(baseUrl, '/api/v1')
-
         logging.info("Connecting to API: %s" % apiUrl)
 
         S = requests.Session()
         X = S.get(f"{apiUrl}/challenges", headers=headers).text
-
         challs = json.loads(X)
 
         categories = {}
@@ -79,7 +91,6 @@ def main(argv):
         desc_links = []
 
         for chall in challs['data']:
-
             Y = json.loads(S.get(f"{apiUrl}/challenges/{chall['id']}", headers=headers).text)["data"]
 
             if Y["category"] not in categories:
@@ -87,42 +98,37 @@ def main(argv):
             else:
                 categories[Y["category"]].append(Y)
 
+            print(slugify(Y["name"]))
             catDir = os.path.join(outputDir, "challenges", Y["category"])
             challDir = os.path.join(catDir, slugify(Y["name"]))
 
-            os.makedirs(challDir, exist_ok=True)
             os.makedirs(catDir, exist_ok=True)
+            os.makedirs(challDir, exist_ok=True)
 
-            with open(os.path.join(challDir, "README.md"), "w") as chall_readme:
+            with open(os.path.join(challDir, "README.md"), "w", encoding="utf-8") as chall_readme:
                 logging.info("Creating challenge readme: %s" % Y["name"])
-                chall_readme.write("# %s\n\n" % Y["name"])
-                chall_readme.write("## Description\n\n%s\n\n" % Y["description"])
+                chall_readme.write(f"# {Y['name']}\n\n")
+                chall_readme.write(f"## Description\n\n{Y['description']}\n\n")
 
                 files_header = False
 
-                # Find links in description
                 links = re.findall(r'(https?://[^\s]+)', Y["description"])
-
                 if len(links) > 0:
                     for link in links:
                         desc_links.append((Y["name"], link))
 
-                # Find MD images in description
                 md_links = re.findall(r'!\[(.*)\]\(([^\s]+)\)', Y["description"])
-
                 if len(md_links) > 0:
                     for link_desc, link in md_links:
                         dl_url = urljoin(baseUrl, link)
-
                         F = S.get(dl_url, stream=True)
-
-                        fname = urlparse(f_url).path.split("/")[-1]
+                        fname = urlparse(dl_url).path.split("/")[-1]
 
                         if link[0] in ["/", "\\"]:
                             link = link[1:]
 
                         local_f_path = os.path.join(outputDir, link)
-                        os.makedirs(os.path.join(outputDir, os.path.dirname(link)), exist_ok=True)
+                        os.makedirs(os.path.dirname(local_f_path), exist_ok=True)
 
                         total_size_in_bytes = int(F.headers.get('content-length', 0))
                         progress_bar = tqdm(total=total_size_in_bytes, unit='iB', unit_scale=True, desc=fname)
@@ -132,28 +138,25 @@ def main(argv):
                                 if chunk:
                                     progress_bar.update(len(chunk))
                                     LF.write(chunk)
-                            LF.close()
 
                         progress_bar.close()
 
                 if "files" in Y and len(Y["files"]) > 0:
-
                     if not files_header:
                         chall_readme.write("## Files\n\n")
+                        files_header = True
 
                     challFiles = os.path.join(challDir, "files")
                     os.makedirs(challFiles, exist_ok=True)
 
                     for file in Y["files"]:
-
-                        # Fetch file from remote server
                         f_url = urljoin(baseUrl, file)
                         F = S.get(f_url, stream=True)
 
                         fname = urlparse(f_url).path.split("/")[-1]
                         local_f_path = os.path.join(challFiles, fname)
 
-                        chall_readme.write("* [%s](<files/%s>)\n\n" % (fname, fname))
+                        chall_readme.write(f"* [{fname}](<files/{fname}>)\n\n")
 
                         total_size_in_bytes = int(F.headers.get('content-length', 0))
                         progress_bar = tqdm(total=total_size_in_bytes, unit='iB', unit_scale=True, desc=fname)
@@ -163,34 +166,26 @@ def main(argv):
                                 if chunk:
                                     progress_bar.update(len(chunk))
                                     LF.write(chunk)
-                            LF.close()
 
                         progress_bar.close()
 
-                chall_readme.close()
-
-        with open(os.path.join(outputDir, "README.md"), "w") as ctf_readme:
-
+        with open(os.path.join(outputDir, "README.md"), "w", encoding="utf-8") as ctf_readme:
             logging.info("Writing main CTF readme...")
 
-            ctf_readme.write("# %s\n\n" % ctfName)
+            ctf_readme.write(f"# {ctfName}\n\n")
             ctf_readme.write("## About\n\n[insert description here]\n\n")
             ctf_readme.write("## Challenges\n\n")
 
             for category in categories:
-                ctf_readme.write("### %s\n\n" % category)
-
+                ctf_readme.write(f"### {category}\n\n")
                 for chall in categories[category]:
-
-                    chall_path = "challenges/%s/%s/" % (chall['category'], slugify(chall['name']))
-                    ctf_readme.write("* [%s](<%s>)" % (chall['name'], chall_path))
+                    chall_path = f"challenges/{chall['category']}/{slugify(chall['name'])}/"
+                    ctf_readme.write(f"* [{chall['name']}](<{chall_path}>)")
 
                     if "tags" in chall and len(chall["tags"]) > 0:
-                        ctf_readme.write(" <em>(%s)</em>" % ",".join(chall["tags"]))
+                        ctf_readme.write(f" <em>({','.join(chall['tags'])})</em>")
 
                     ctf_readme.write("\n")
-
-            ctf_readme.close()
 
         logging.info("All done!")
 
