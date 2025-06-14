@@ -80,13 +80,13 @@ def slugify(text):
 
 def _get_args():
     parser = argparse.ArgumentParser(
-      prog='CTFd Download Tool',
+      prog='ctf-downloader',
       formatter_class=argparse.RawDescriptionHelpFormatter,
       epilog=textwrap.dedent('''\
         Extra Information:
             This tool can be used to download CTFd instances, particularly for generating writeups.
         Example Usage:
-            python download.py -u http://myctf.ctfd.io/ -n MyCTF -o /tmp/myctf-writeups -t api_token
+            ctfd-downloader -u http://myctf.ctfd.io/ -n MyCTF -o /tmp/myctf-writeups -t api_token
          '''))
     parser.add_argument("-u", "--url", help="CTF Base URL (http://myctf.ctfd.io/)", required=True)
     parser.add_argument("-n", "--name", help="CTF Name (MyCTF)", required=True)

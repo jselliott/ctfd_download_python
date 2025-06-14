@@ -1,25 +1,22 @@
 # Python CTFd Downloader
 A script to download all the challenges and files from the CTFd instance.
 
-### Installation
+## Installation
 
-#### Clone this repo:
+### Using Pipx
 
-    git clone https://github.com/jselliott/ctfd_download_python.git
-
-#### Install requirements:
-
-    pip install -r requirements.txt
+```pipx install ctfd-downloader```
     
+
+## Usage 
+
 #### Generate Access Token
 
 In order to interact with the CTFd API, you'll need to create an Access Token. You can do this by browsing to the Settings page under your profile in the top-right corner of the page, then click on the Access Tokens tab. After inputting an expiration date, click on Generate to create a new token.
 
 #### Run The Downloader
 
-```
-python download.py -u http://ctf.url -n ctf_name -o /home/user/Desktop/ -t access_token
-```
+```ctfd-downloader -u http://ctf.url -n ctf_name -o /home/user/Desktop/ -t access_token```
 
 You can use the `--update` flag to update an existing repository with new challenges without redownloading everything.
 
