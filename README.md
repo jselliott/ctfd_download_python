@@ -37,5 +37,5 @@ My solution
 Run the formatter just by pointing it at the directory of the repo.
 
 ```
-python format.py ./ctfd_repo/
+ctfd-downloader-format ./ctfd_repo/
 ```
