@@ -117,7 +117,7 @@ def main():
     if args.session.startswith("session="):
         headers["Cookie"] = args.session
     else:
-        headers["Authorization"] = args.session
+        headers["Authorization"] = f"Bearer {args.session}"
     
     # Add the API endpoint to the baseURL
     apiUrl = urljoin(baseUrl, '/api/v1')
